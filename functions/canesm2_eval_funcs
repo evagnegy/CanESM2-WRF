@@ -12,12 +12,6 @@ import cartopy.feature as cf
 import matplotlib as mpl
 from scipy.interpolate import griddata
 import os
-import scipy
-
-from make_colorbars import *
-from make_colorbars import make_colorbar
-
-
 
 def get_eccc_obs(output_freq,station_IDs,stations_dir,var): 
     
@@ -256,14 +250,11 @@ def get_noaa_obs(output_freq,station_IDs,stations_dir,var):
     elif output_freq == "yearly":
         return df_yearly
 
-def get_noaa_buoys(output_freq,station_IDs,noaa_buoy_heights,stations_dir,var): 
+def get_noaa_buoys(output_freq,station_IDs,stations_dir,var): 
 
-    h_target = 10
-    h_0 = 1
-    
     start_year = 1986
     end_year = 2005
-    
+
     hours = pd.date_range(datetime.date(start_year,1,1),datetime.date(end_year+1,1,2)-datetime.timedelta(days=1),freq='H')[:-1]
     
     if var=="t":
@@ -274,12 +265,12 @@ def get_noaa_buoys(output_freq,station_IDs,noaa_buoy_heights,stations_dir,var):
     df_all = pd.DataFrame()
     
     for ID in station_IDs:
-    
+
         df_st = pd.DataFrame()
         
         for year in range(1986,2006):
             
-            #file = stations_dir + ID + 'h' + str(year) + '.txt'
+            file = stations_dir + ID + 'h' + str(year) + '.txt'
             file = '/Users/evagnegy/Desktop/noaa_buoys/' + ID + 'h' + str(year) + '.txt'
         
             if not os.path.exists(file):
@@ -313,41 +304,30 @@ def get_noaa_buoys(output_freq,station_IDs,noaa_buoy_heights,stations_dir,var):
     
     df_hourly = df_all.T
     
-    if var == "wind":
-        df_hourly_adj = df_hourly * (np.log(h_target / h_0) / np.log(noaa_buoy_heights / h_0))
-    else:
-        df_hourly_adj = df_hourly
+    yearly_missing = df_hourly.resample('Y').apply(lambda x: x.isna().sum())
+    monthly_missing = df_hourly.resample('M').apply(lambda x: x.isna().sum())
+    daily_missing = df_hourly.resample('D').apply(lambda x: x.isna().sum())
     
-    # =============================================================================
-    # yearly_missing = df_hourly.resample('Y').apply(lambda x: x.isna().sum())
-    # monthly_missing = df_hourly.resample('M').apply(lambda x: x.isna().sum())
-    # daily_missing = df_hourly.resample('D').apply(lambda x: x.isna().sum())
-    # 
-    # yearly_expected = df_hourly.resample('Y').apply(lambda x: len(x))
-    # monthly_expected = df_hourly.resample('M').apply(lambda x: len(x))
-    # daily_expected = df_hourly.resample('D').apply(lambda x: len(x))
-    # 
-    # missing = 0.5
-    # 
-    # years_to_nan = yearly_missing > (missing * yearly_expected)
-    # months_to_nan = monthly_missing > (missing * monthly_expected)
-    # days_to_nan = daily_missing > (missing * daily_expected)
-    # =============================================================================
+    yearly_expected = df_hourly.resample('Y').apply(lambda x: len(x))
+    monthly_expected = df_hourly.resample('M').apply(lambda x: len(x))
+    daily_expected = df_hourly.resample('D').apply(lambda x: len(x))
+    
+    years_to_nan = yearly_missing > (0.1 * yearly_expected)
+    months_to_nan = monthly_missing > (0.1 * monthly_expected)
+    days_to_nan = daily_missing > (0.1 * daily_expected)
     
         
-    df_daily = df_hourly_adj.groupby(pd.PeriodIndex(df_hourly_adj.index, freq="D")).mean()
-    df_monthly = df_hourly_adj.groupby(pd.PeriodIndex(df_hourly_adj.index, freq="M")).mean()
-    df_yearly = df_hourly_adj.groupby(pd.PeriodIndex(df_hourly_adj.index, freq="Y")).mean()
+    df_daily = df_hourly.groupby(pd.PeriodIndex(df_hourly.index, freq="D")).mean()
+    df_monthly = df_hourly.groupby(pd.PeriodIndex(df_hourly.index, freq="M")).mean()
+    df_yearly = df_hourly.groupby(pd.PeriodIndex(df_hourly.index, freq="Y")).mean()
     
-    # =============================================================================
-    # years_to_nan.index = df_yearly.index
-    # months_to_nan.index = df_monthly.index
-    # days_to_nan.index = df_daily.index
-    #  
-    # df_yearly = df_yearly.mask(years_to_nan)
-    # df_monthly = df_monthly.mask(months_to_nan)
-    # df_daily = df_daily.mask(days_to_nan)
-    # =============================================================================
+    years_to_nan.index = df_yearly.index
+    months_to_nan.index = df_monthly.index
+    days_to_nan.index = df_daily.index
+     
+    df_yearly = df_yearly.mask(years_to_nan)
+    df_monthly = df_monthly.mask(months_to_nan)
+    df_daily = df_daily.mask(days_to_nan)
     
     if output_freq == "daily":
         return df_daily
@@ -356,84 +336,8 @@ def get_noaa_buoys(output_freq,station_IDs,noaa_buoy_heights,stations_dir,var):
     elif output_freq == "yearly":
         return df_yearly
     elif output_freq == "hourly":
-        return df_hourly_adj
+        return df_hourly
 
-def get_eccc_buoys(output_freq,station_IDs,stations_dir,var): 
-
-
-    df_hourly = pd.DataFrame()
-    
-    h_ref = 5 #5 for all eccc stations
-    h_target = 10
-    h_0 = 1
-    
-    for ID in station_IDs:
-        
-        mat = scipy.io.loadmat(stations_dir + 'daily/ECCC_buoy/MB_' + str(ID) + '_HM.mat')
-    
-        temp = mat['MB_' + str(ID) + '_HM_VALUES'][:,4]
-        times = mat['MB_' + str(ID) + '_HM_VALUES'][:,0]
-        
-        times_py = (pd.to_datetime(times-719529,unit='D')).to_pydatetime()
-        
-        df = pd.DataFrame(temp,index=times_py)
-        df.index = pd.to_datetime(df.index)
-        
-        df = df.rename_axis("DateTime")
-        df.index = df.index.round(freq='H')
-    
-        df = df[(df.index >= '1986-01-01 00:00') & (df.index < '2006-01-01 00:00')]
-        df.index = pd.to_datetime(df.index, format='%Y-%m-%d %H')
-    
-        df_hourly = pd.concat([df_hourly,df],axis=1)
-        
-        if var == "wind":
-            df_hourly_adj = (df_hourly * (np.log(h_target / h_0) / np.log(h_ref / h_0)))/3.6 #fix unit
-        else:
-            df_hourly_adj = df_hourly
-            
-    df_hourly_adj.columns = station_IDs
-    
-    # =============================================================================
-    # yearly_missing = df_hourly.resample('Y').apply(lambda x: x.isna().sum())
-    # monthly_missing = df_hourly.resample('M').apply(lambda x: x.isna().sum())
-    # daily_missing = df_hourly.resample('D').apply(lambda x: x.isna().sum())
-    # 
-    # yearly_expected = df_hourly.resample('Y').apply(lambda x: len(x))
-    # monthly_expected = df_hourly.resample('M').apply(lambda x: len(x))
-    # daily_expected = df_hourly.resample('D').apply(lambda x: len(x))
-    # 
-    # missing = 0.5
-    # 
-    # years_to_nan = yearly_missing > (missing * yearly_expected)
-    # months_to_nan = monthly_missing > (missing * monthly_expected)
-    # days_to_nan = daily_missing > (missing * daily_expected)
-    # =============================================================================
-    
-    df_daily = df_hourly_adj.groupby(pd.PeriodIndex(df_hourly_adj.index, freq="D")).mean().round(1)
-    df_monthly = df_hourly_adj.groupby(pd.PeriodIndex(df_hourly_adj.index, freq="M")).mean().round(1)
-    df_yearly = df_hourly_adj.groupby(pd.PeriodIndex(df_hourly_adj.index, freq="Y")).mean().round(1)
-        
-    # =============================================================================
-    # years_to_nan.index = df_yearly.index
-    # months_to_nan.index = df_monthly.index
-    # days_to_nan.index = df_daily.index
-    #  
-    # df_yearly = df_yearly.mask(years_to_nan)
-    # df_monthly = df_monthly.mask(months_to_nan)
-    # df_daily = df_daily.mask(days_to_nan)
-    # =============================================================================
-
-    
-    if output_freq == "daily":
-        return df_daily
-    elif output_freq == "monthly":
-        return df_monthly
-    elif output_freq == "yearly":
-        return df_yearly
-    elif output_freq == "hourly":
-        return df_hourly_adj
-    
 def get_wrf(output_freq, agency, station_IDs, domain, run, var, model_files_dir,start_year):
     
     df_hourly_all = pd.DataFrame()
@@ -544,6 +448,10 @@ def get_wrf(output_freq, agency, station_IDs, domain, run, var, model_files_dir,
         return df_yearly_all
     elif output_freq == "hourly":
         return df_hourly_all
+
+
+
+
 
 
 def get_canesm2(output_freq, agency, station_IDs, run, var, model_files_dir,start_year):
@@ -797,175 +705,10 @@ def get_pcic(output_freq, agency, station_IDs, run, var, model_files_dir):
         return daily
     
   
-def plot_all_d03_climo(title,variable):
-    
-    period = 'hist'
-    gridded_data_path = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/gridded_model_data/means/'
-  
-    if variable == "wind":
-        filename = "wind_d03_mean_" + period + "_wspd"
-        var = 'wspd'
-    else:
-        filename = variable + "_d03_mean_" + period 
-        var=variable
-        
-    if variable == "t":
-        climo_d03 = Dataset(gridded_data_path + filename + '.nc','r').variables["T2"][:]-273.15
-    else:
-        climo_d03 = Dataset(gridded_data_path + filename + '.nc','r').variables[var][:]
-
-    lon_d03 = Dataset(gridded_data_path + filename + '.nc','r').variables['lon'][:]
-    lat_d03 = Dataset(gridded_data_path + filename + '.nc','r').variables['lat'][:]
-    
-    geo_em_d02_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/geo_em.d02.nc'
-    geo_em_d02_nc = Dataset(geo_em_d02_file, mode='r')
-    lat_d02 = np.squeeze(geo_em_d02_nc.variables['XLAT_C'][:])
-    lon_d02 = np.squeeze(geo_em_d02_nc.variables['XLONG_C'][:])
-    topo_d02 = np.squeeze(geo_em_d02_nc.variables['HGT_M'][:])
-    
-    geo_em_d01_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/geo_em.d01.nc'
-    geo_em_d01_nc = Dataset(geo_em_d01_file, mode='r')
-    lat_d01 = np.squeeze(geo_em_d01_nc.variables['XLAT_C'][:])
-    lon_d01 = np.squeeze(geo_em_d01_nc.variables['XLONG_C'][:])
-    topo_d01 = np.squeeze(geo_em_d01_nc.variables['HGT_M'][:])
-    
-    canrcm4_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/orog_CanRCM4.nc'
-    canrcm4_nc = Dataset(canrcm4_file, mode='r')
-    lat_canrcm4 = np.squeeze(canrcm4_nc.variables['lat'][:])
-    lon_canrcm4 = np.squeeze(canrcm4_nc.variables['lon'][:])
-    topo_canrcm4 = np.squeeze(canrcm4_nc.variables['orog'][:])
-
-    #topo_canrcm4 = topo_canrcm4[:-1,:-1]
-    #lat_canrcm4 = (lat_canrcm4[1:]+lat_canrcm4[:-1])/2
-    #lon_canrcm4 = (lon_canrcm4[1:]+lon_canrcm4[:-1])/2  
-    
-    canesm2_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/orog_CanESM2.nc'
-    canesm2_nc = Dataset(canesm2_file, mode='r')
-    lat_canesm2 = np.squeeze(canesm2_nc.variables['lat'][:])
-    lon_canesm2 = np.squeeze(canesm2_nc.variables['lon'][:])
-    topo_canesm2 = np.squeeze(canesm2_nc.variables['orog'][:])
-    
-    #topo_canesm2 = topo_canesm2[:-1,:-1]
-    #lat_canesm2 = (lat_canesm2[1:]+lat_canesm2[:-1])/2
-    #lon_canesm2 = (lon_canesm2[1:]+lon_canesm2[:-1])/2  
-    
-    pcic_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_model_data/CanESM2_PCIC/tasmin_day_CanESM2_historical_rcp45.nc'
-    pcic_nc = Dataset(pcic_file, mode='r')
-    lat_pcic = np.squeeze(pcic_nc.variables['lat'][:])
-    lon_pcic = np.squeeze(pcic_nc.variables['lon'][:])
-    var_pcic = np.squeeze(pcic_nc.variables['tasmin'][0,:,:])
-    lon_pcic,lat_pcic=np.meshgrid(lon_pcic,lat_pcic)
-
-    
-    WPSFile = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/namelist.wps.txt'
-    wpsproj, latlonproj, corner_lat_full, corner_lon_full, length_x, length_y = WRFDomainLib.calc_wps_domain_info(WPSFile)
-
-
-    fig1 = plt.figure(figsize=(10, 10),dpi=200)
-    ax1 = fig1.add_subplot(1, 1, 1, projection=wpsproj)
-
-    if title == 'CanESM2-WRF D03':
-        #ax1.pcolormesh(lon_d02, lat_d02, topo_d02, cmap="terrain", vmin=0,vmax=2500, alpha=0.3, transform=ccrs.PlateCarree(),zorder=0)
-        
-        if variable == "t":
-            colors = ['#383593','#4f74b2','#7dacd0','#b1d8e8','#e2f3f8','#fdffc1',
-                          '#fae194','#f6b066','#eb7249','#ce3a2f','#9e152a']
-    
-            lim = [-12,18] 
-        elif variable == "pr":
-            colors = ['#f2ffda','#ecf8b3','#c9e9b5','#88ccbb','#56b4c3','#3c8fbe','#335da6','#2e3392','#121c57']
-
-            lim = [0,15] 
-        elif variable == "wind":
-            colors = ['#f2ffda','#ecf8b3','#c9e9b5','#88ccbb','#56b4c3','#3c8fbe','#335da6','#2e3392','#121c57']
-            lim = [0,12] 
-        
-        cmap,_ = make_colorbar(colors,lim)
-
-        ax1.pcolormesh(lon_d03, lat_d03, np.squeeze(climo_d03), cmap=cmap, vmin=lim[0],vmax=lim[-1], alpha=1, transform=ccrs.PlateCarree(),zorder=1)
-    elif title == 'CanESM2-WRF D02':
-        ax1.pcolormesh(lon_d02, lat_d02, topo_d02, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
-    elif title == 'CanESM2-WRF D01':
-         ax1.pcolormesh(lon_d01, lat_d01, topo_d01, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
-    elif title == 'CanESM2':
-        ax1.pcolormesh(lon_canesm2, lat_canesm2, topo_canesm2, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
-    elif title == 'CanRCM4':
-        ax1.pcolormesh(lon_canrcm4, lat_canrcm4, topo_canrcm4, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
-    elif "PCIC" in title:
-        
-        lon_source_1d = lon_d03[:-1,:-1].ravel()
-        lat_source_1d = lat_d03[:-1,:-1].ravel()
-        lon_target_1d = lon_pcic.ravel()
-        lat_target_1d = lat_pcic.ravel()
-
-        var_source_1d = climo_d03.ravel()
-
-        topo_regridded_1d = griddata((lon_source_1d, lat_source_1d), var_source_1d, (lon_target_1d, lat_target_1d), method='linear')
-        topo_regridded = topo_regridded_1d.reshape(lon_pcic.shape)
-
-        topo_pcic = np.ma.masked_array(topo_regridded, mask=var_pcic.mask)
-        topo_pcic = topo_pcic.filled(np.nan)
-              
-        ax1.pcolormesh(lon_pcic, lat_pcic, topo_pcic, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
-
-
-    #ax1.coastlines('10m', linewidth=0.8)
-    ax1.add_feature(cf.OCEAN, edgecolor='face', facecolor='lightblue', zorder=0)
-    ax1.add_feature(cf.BORDERS,linewidth=0.5)
-    ax1.add_feature(cf.STATES,linewidth=0.5)
-
-    # d03 box
-    corner_x3, corner_y3 = WRFDomainLib.reproject_corners(corner_lon_full[2,:], corner_lat_full[2,:], wpsproj, latlonproj)
-    random_y_factor = -corner_y3[0]/13
-    random_x_factor = corner_x3[0]/65
-
-    #ax1.add_patch(mpl.patches.Rectangle((corner_x3[0]+random_x_factor, corner_y3[0]+random_y_factor),  length_x[2], length_y[2],fill=None, lw=5, edgecolor='red', zorder=2))
-    #ax1.text(-3680871, 720000, 'D03', va='top', ha='left',fontweight='bold', size=32, color='red', zorder=4)
-
-    #ax1.set_extent([-131, -119, 46, 52], crs=ccrs.PlateCarree())
-
-    ax1.set_extent([-131+1.4, -119-1.1, 46+0.4, 52-0.3], crs=ccrs.PlateCarree())
-
-    gl = ax1.gridlines(crs=ccrs.PlateCarree(), draw_labels=False, linestyle='--', alpha=1,lw=1.5)
-    gl.top_labels = False
-    gl.bottom_labels = False
-    gl.left_labels = False
-    gl.right_labels = False
-    gl.xlocator = mpl.ticker.FixedLocator(np.arange(-180,-49,4))
-    gl.ylocator = mpl.ticker.FixedLocator(np.arange(0,81,4))
-
-# =============================================================================
-#     ax1.text(corner_x3[0]+length_x[2]*0.15, corner_y3[0]+length_y[2]*-0.07, '44ºN', va='top', ha='left', size=18, color='k', zorder=2,rotation=-38,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*-0.17, corner_y3[0]+length_y[2]*0.81, '48ºN', va='top', ha='left', size=18, color='k', zorder=2,rotation=-43,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.365, corner_y3[0]+length_y[2]*0.995, '52ºN', va='top', ha='left', size=18, color='k', zorder=2,rotation=-40,alpha=0.8)
-# 
-#     ax1.text(corner_x3[0]+length_x[2]*-0.18, corner_y3[0]+length_y[2]*0.14, '128ºW', va='top', ha='left', size=18, color='k', zorder=2,rotation=50,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*-0.18, corner_y3[0]+length_y[2]*0.68, '132ºW', va='top', ha='left', size=18, color='k', zorder=2,rotation=50,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.875, corner_y3[0]+length_y[2]*1.0, '124ºW', va='top', ha='left', size=18, color='k', zorder=2,rotation=55,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.94, corner_y3[0]+length_y[2]*0.57, '120ºW', va='top', ha='left', size=18, color='k', zorder=2,rotation=55,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.91, corner_y3[0]+length_y[2]*-0.01, '116ºW', va='top', ha='left', size=18, color='k', zorder=2,rotation=59,alpha=0.8)
-# =============================================================================
 
 
 
-# =============================================================================
-#     ax1.text(corner_x3[0]+length_x[2]*-0.175, corner_y3[0]+length_y[2]*0.13, '44$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-40,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*-0.175, corner_y3[0]+length_y[2]*0.78, '48$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-38,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.935, corner_y3[0]+length_y[2]*0.55, '52$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-30,alpha=0.8)
-# 
-#     ax1.text(corner_x3[0]+length_x[2]*0.1, corner_y3[0]+length_y[2]*1.01, '132$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.53, corner_y3[0]+length_y[2]*1.01, '128$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.875, corner_y3[0]+length_y[2]*1.01, '124$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     #ax1.text(corner_x3[0]+length_x[2]*0.95, corner_y3[0]+length_y[2]*0.67, '120$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=58,alpha=0.8)
-#     #ax1.text(corner_x3[0]+length_x[2]*0.935, corner_y3[0]+length_y[2]*0.035, '116$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=59,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.1, corner_y3[0]+length_y[2]*-0.08, '124$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.53, corner_y3[0]+length_y[2]*-0.08, '120$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.9, corner_y3[0]+length_y[2]*-0.08, '116$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-# 
-# =============================================================================
 
-
-    return fig1,ax1
 
 def plot_all_d03(title):
     
@@ -981,12 +724,6 @@ def plot_all_d03(title):
     lon_d02 = np.squeeze(geo_em_d02_nc.variables['XLONG_C'][:])
     topo_d02 = np.squeeze(geo_em_d02_nc.variables['HGT_M'][:])
     
-    geo_em_d01_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/geo_em.d01.nc'
-    geo_em_d01_nc = Dataset(geo_em_d01_file, mode='r')
-    lat_d01 = np.squeeze(geo_em_d01_nc.variables['XLAT_C'][:])
-    lon_d01 = np.squeeze(geo_em_d01_nc.variables['XLONG_C'][:])
-    topo_d01 = np.squeeze(geo_em_d01_nc.variables['HGT_M'][:])
-    
     canrcm4_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/orog_CanRCM4.nc'
     canrcm4_nc = Dataset(canrcm4_file, mode='r')
     lat_canrcm4 = np.squeeze(canrcm4_nc.variables['lat'][:])
@@ -1023,12 +760,10 @@ def plot_all_d03(title):
     ax1 = fig1.add_subplot(1, 1, 1, projection=wpsproj)
 
     if title == 'CanESM2-WRF D03':
-        #ax1.pcolormesh(lon_d02, lat_d02, topo_d02, cmap="terrain", vmin=0,vmax=2500, alpha=0.3, transform=ccrs.PlateCarree(),zorder=0)
-        ax1.pcolormesh(lon_d03, lat_d03, topo_d03, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
+        ax1.pcolormesh(lon_d02, lat_d02, topo_d02, cmap="terrain", vmin=0,vmax=2500, alpha=0.3, transform=ccrs.PlateCarree(),zorder=0)
+        ax1.pcolormesh(lon_d03, lat_d03, topo_d03, cmap="terrain", vmin=0,vmax=2500, alpha=0.4, transform=ccrs.PlateCarree(),zorder=0)
     elif title == 'CanESM2-WRF D02':
         ax1.pcolormesh(lon_d02, lat_d02, topo_d02, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
-    elif title == 'CanESM2-WRF D01':
-        ax1.pcolormesh(lon_d01, lat_d01, topo_d01, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
     elif title == 'CanESM2':
         ax1.pcolormesh(lon_canesm2, lat_canesm2, topo_canesm2, cmap="terrain", vmin=0,vmax=2500, alpha=0.7, transform=ccrs.PlateCarree(),zorder=0)
     elif title == 'CanRCM4':
@@ -1052,20 +787,19 @@ def plot_all_d03(title):
 
 
     #ax1.coastlines('10m', linewidth=0.8)
-    #ax1.add_feature(cf.OCEAN, edgecolor='face', facecolor='lightblue', zorder=1)
+    ax1.add_feature(cf.OCEAN, edgecolor='face', facecolor='lightblue', zorder=1)
     ax1.add_feature(cf.BORDERS,linewidth=0.5)
     ax1.add_feature(cf.STATES,linewidth=0.5)
 
     # d03 box
-    #corner_x3, corner_y3 = WRFDomainLib.reproject_corners(corner_lon_full[2,:], corner_lat_full[2,:], wpsproj, latlonproj)
-    #random_y_factor = -corner_y3[0]/13
-    #random_x_factor = corner_x3[0]/65
+    corner_x3, corner_y3 = WRFDomainLib.reproject_corners(corner_lon_full[2,:], corner_lat_full[2,:], wpsproj, latlonproj)
+    random_y_factor = -corner_y3[0]/13
+    random_x_factor = corner_x3[0]/65
 
-    #ax1.add_patch(mpl.patches.Rectangle((corner_x3[0]+random_x_factor, corner_y3[0]+random_y_factor),  length_x[2], length_y[2],fill=None, lw=5, edgecolor='red', zorder=2))
+    ax1.add_patch(mpl.patches.Rectangle((corner_x3[0]+random_x_factor, corner_y3[0]+random_y_factor),  length_x[2], length_y[2],fill=None, lw=5, edgecolor='red', zorder=2))
     #ax1.text(-3680871, 720000, 'D03', va='top', ha='left',fontweight='bold', size=32, color='red', zorder=4)
 
-    #ax1.set_extent([-131, -119, 46, 52], crs=ccrs.PlateCarree())
-    ax1.set_extent([-131+1.4, -119-1.1, 46+0.4, 52-0.3], crs=ccrs.PlateCarree())
+    ax1.set_extent([-131, -119, 46, 52], crs=ccrs.PlateCarree())
 
     gl = ax1.gridlines(crs=ccrs.PlateCarree(), draw_labels=False, linestyle='--', alpha=1,lw=1.5)
     gl.top_labels = False
@@ -1087,20 +821,18 @@ def plot_all_d03(title):
 #     ax1.text(corner_x3[0]+length_x[2]*0.91, corner_y3[0]+length_y[2]*-0.01, '116ºW', va='top', ha='left', size=18, color='k', zorder=2,rotation=59,alpha=0.8)
 # =============================================================================
 
-# =============================================================================
-#     ax1.text(corner_x3[0]+length_x[2]*-0.175, corner_y3[0]+length_y[2]*0.13, '44$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-40,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*-0.175, corner_y3[0]+length_y[2]*0.78, '48$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-38,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.935, corner_y3[0]+length_y[2]*0.55, '52$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-30,alpha=0.8)
-# 
-#     ax1.text(corner_x3[0]+length_x[2]*0.1, corner_y3[0]+length_y[2]*1.01, '132$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.53, corner_y3[0]+length_y[2]*1.01, '128$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.875, corner_y3[0]+length_y[2]*1.01, '124$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     #ax1.text(corner_x3[0]+length_x[2]*0.95, corner_y3[0]+length_y[2]*0.67, '120$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=58,alpha=0.8)
-#     #ax1.text(corner_x3[0]+length_x[2]*0.935, corner_y3[0]+length_y[2]*0.035, '116$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=59,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.1, corner_y3[0]+length_y[2]*-0.08, '124$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.53, corner_y3[0]+length_y[2]*-0.08, '120$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-#     ax1.text(corner_x3[0]+length_x[2]*0.9, corner_y3[0]+length_y[2]*-0.08, '116$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
-# =============================================================================
+    ax1.text(corner_x3[0]+length_x[2]*-0.175, corner_y3[0]+length_y[2]*0.13, '44$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-40,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*-0.175, corner_y3[0]+length_y[2]*0.78, '48$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-38,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*0.935, corner_y3[0]+length_y[2]*0.55, '52$\degree$N', va='top', ha='left', size=18, color='k', zorder=10,rotation=-30,alpha=0.8)
+
+    ax1.text(corner_x3[0]+length_x[2]*0.1, corner_y3[0]+length_y[2]*1.01, '132$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*0.53, corner_y3[0]+length_y[2]*1.01, '128$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*0.875, corner_y3[0]+length_y[2]*1.01, '124$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
+    #ax1.text(corner_x3[0]+length_x[2]*0.95, corner_y3[0]+length_y[2]*0.67, '120$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=58,alpha=0.8)
+    #ax1.text(corner_x3[0]+length_x[2]*0.935, corner_y3[0]+length_y[2]*0.035, '116$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=59,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*0.1, corner_y3[0]+length_y[2]*-0.08, '124$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*0.53, corner_y3[0]+length_y[2]*-0.08, '120$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
+    ax1.text(corner_x3[0]+length_x[2]*0.9, corner_y3[0]+length_y[2]*-0.08, '116$\degree$W', va='top', ha='left', size=18, color='k', zorder=10,rotation=10,alpha=0.8)
 
 
 

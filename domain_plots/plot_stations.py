@@ -26,6 +26,8 @@ noaa_daily_stations_wind = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_met
 noaa_daily_stations_t = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_metadata_lists/NOAA_d03_stations_tas.csv'
 noaa_daily_stations = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_metadata_lists/NOAA_d03_stations.csv'
 
+noaa_daily_stations_buoys = '//Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_metadata_lists/NOAA_buoys.csv'
+eccc_daily_stations_buoys = '//Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_metadata_lists/ECCC_buoys.csv'
 
 
 
@@ -89,6 +91,18 @@ noaa_station_file_tas = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/station_metada
 
 df = pd.read_csv(noaa_station_file_tas)
 noaa_station_IDs_tas = list(df.iloc[:,0])
+
+df = pd.read_csv(noaa_daily_stations_buoys)
+noaa_buoy_station_IDs = list(df["STATION_ID"])
+
+noaa_buoy_lats = df['Y']
+noaa_buoy_lons = df['X']
+
+df = pd.read_csv(eccc_daily_stations_buoys)
+eccc_buoy_station_IDs = list(df["STATION_ID"])
+
+eccc_buoy_lats = df['Y']
+eccc_buoy_lons = df['X']
 
 
 #%%
@@ -213,7 +227,7 @@ cbar_ax.tick_params(labelsize=20)
 cbar_ax.set_xlabel('Elevation (m)',size=23) 
     
 
-fig1.savefig('/Users/evagnegy/Desktop/paper_figures/stations/all_stations_elev.png', dpi=600,bbox_inches='tight')
+#fig1.savefig('/Users/evagnegy/Desktop/paper_figures/stations/all_stations_elev.png', dpi=600,bbox_inches='tight')
 
 
  #%% plot with whole d03 box
@@ -244,6 +258,12 @@ for i in range(len(noaa_lats)):
     else:
         plt.scatter(noaa_lons.values[i],noaa_lats.values[i],s=180,c=noaa_elev.values[i],transform=ccrs.PlateCarree(),edgecolor=border,linewidth=0.5,marker='o',zorder=4,cmap='terrain',vmin=vmin,vmax=vmax)
 
+for i in range(len(noaa_buoy_lats)):
+    plt.scatter(noaa_buoy_lons.values[i],noaa_buoy_lats.values[i],s=180,c=5,transform=ccrs.PlateCarree(),edgecolor='gold',linewidth=1.5,marker='o',zorder=4,cmap='terrain',vmin=vmin,vmax=vmax)
+
+for i in range(len(eccc_buoy_lats)):
+    plt.scatter(eccc_buoy_lons.values[i],eccc_buoy_lats.values[i],s=150,c=5,transform=ccrs.PlateCarree(),edgecolor='gold',linewidth=1.5,marker='s',zorder=4,cmap='terrain',vmin=vmin,vmax=vmax)
+
 
 plt.scatter(0,0,facecolors='none',s=150,edgecolor='k',linewidth=2,label="ECCC station",marker='s')
 plt.scatter(0,0,facecolors='none',s=220,edgecolor='k',linewidth=2,label="BCH station",marker='^')
@@ -253,9 +273,10 @@ plt.scatter(0,0,facecolors='none',s=0,edgecolor='none',linewidth=0,label=" ")
 
 plt.plot(0,0,color='lightgray',linewidth=3,label="pr, t, wind")
 plt.plot(0,0,color='k',linewidth=2.5,label="pr, t")
+plt.plot(0,0,color='gold',linewidth=2.5,label="t, wind")
 plt.plot(0,0,color='r',linewidth=2.5,label="pr")
 
-plt.legend(loc=(0.12,0.6),fontsize=16)
+plt.legend(loc=(0.12,0.3),fontsize=15)
 
 
 cmap = 'terrain'
@@ -269,7 +290,7 @@ cbar_ax.tick_params(labelsize=20)
 cbar_ax.set_xlabel('Elevation (m)',size=23) 
     
 
-fig1.savefig('/Users/evagnegy/Desktop/paper_figures/stations/all_stations_elev_vars.png', dpi=600,bbox_inches='tight')
+#fig1.savefig('/Users/evagnegy/Desktop/paper_figures/stations/all_stations_elev_vars.png', dpi=600,bbox_inches='tight')
 
 
 #%% plot pr (all stations)

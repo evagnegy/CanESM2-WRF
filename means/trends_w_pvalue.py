@@ -8,8 +8,8 @@ import datetime
 import matplotlib.ticker as ticker
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
-sys.path.insert(0, '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/scripts/')
-from canesm2_eval_funcs import get_eccc_obs, get_bch_obs,get_wrf,get_canesm2,get_canrcm4,get_pcic
+#sys.path.insert(0, '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/scripts/functions/')
+#from canesm2_eval_funcs import *
 import WRFDomainLib
 import cartopy.feature as cf
 import cartopy.crs as ccrs
@@ -22,20 +22,24 @@ import matplotlib.colors as pltcol
 
 #%%
 
-variable = 'pr'
-period = 'hist'
+variable = 't'
+period = 'rcp45'
+domain = 'd03'
 
 #%%
 
 gridded_data_path = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/gridded_model_data/daily/'
+#gridded_data_path = '/Volumes/EVA/gridded_model_data/'
 
-geo_em_d03_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/geo_em.d03.nc'
-geo_em_d03_nc = Dataset(geo_em_d03_file, mode='r')
-land_d03 = np.squeeze(geo_em_d03_nc.variables['LANDMASK'][:])
 
-lons = Dataset(gridded_data_path + '/t_d03_tmax_daily_hist.nc','r').variables['lon'][:]
-lats = Dataset(gridded_data_path + '/t_d03_tmax_daily_hist.nc','r').variables['lat'][:]
+geo_em_file = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/geo_em.'+domain+'.nc'
+geo_em_nc = Dataset(geo_em_file, mode='r')
+land = np.squeeze(geo_em_nc.variables['LANDMASK'][:])
 
+lons = Dataset(gridded_data_path + '/t_'+domain+'_tas_daily_hist.nc','r').variables['lon'][:]
+lats = Dataset(gridded_data_path + '/t_'+domain+'_tas_daily_hist.nc','r').variables['lat'][:]
+
+lons[lons > 0] += -360
 
 def get_seas_values(values,time):
     vals_MAM = [vals for vals, date in zip(values, time) if date.month in [3,4,5]]
@@ -89,13 +93,16 @@ def get_yearly_means(values,time):
     
 if variable == "t":
     var = 'T2'
-    filename = 't_d03_tas_daily'
+    filename = 't_'+domain+'_tas_daily'
 elif variable == "pr":
     var = 'pr'
-    filename = 'pr_d03_daily'
+    filename = 'pr_'+domain+'_daily'
 elif variable == "wind":
     var = 'wspd'
-    filename = 'wspd_d03_mon'
+    if domain=="d03":
+        filename = 'wspd_'+domain+'_mon'
+    else:
+        filename = "wind_"+domain+'_daily'
     
 wrf_d03_var_hist = Dataset(gridded_data_path + filename + '_hist.nc','r').variables[var][:]
 wrf_d03_var_fut = Dataset(gridded_data_path + filename + '_' + period + '.nc','r').variables[var][:]
@@ -158,14 +165,14 @@ means_JJA_hist = np.mean(means_JJA_yearly_hist,axis=0)
 means_SON_hist = np.mean(means_SON_yearly_hist,axis=0)
 means_DJF_hist = np.mean(means_DJF_yearly_hist,axis=0)
 
-if variable in ['t','wind']:
+if variable in ['t']:#,'wind']:
     means_ANN_delta = means_ANN_fut-means_ANN_hist
     means_MAM_delta = means_MAM_fut-means_MAM_hist
     means_JJA_delta = means_JJA_fut-means_JJA_hist
     means_SON_delta = means_SON_fut-means_SON_hist
     means_DJF_delta = means_DJF_fut-means_DJF_hist
     
-elif variable=="pr":
+elif variable in ['pr','wind']:#,'wind']:
     
     means_ANN_delta = ((means_ANN_fut-means_ANN_hist)/means_ANN_hist)*100
     means_MAM_delta = ((means_MAM_fut-means_MAM_hist)/means_MAM_hist)*100
@@ -173,6 +180,8 @@ elif variable=="pr":
     means_SON_delta = ((means_SON_fut-means_SON_hist)/means_SON_hist)*100
     means_DJF_delta = ((means_DJF_fut-means_DJF_hist)/means_DJF_hist)*100
     
+    
+    #%%
 ttest_ANN = scipy.stats.ttest_ind(np.squeeze(means_ANN_yearly_hist), np.squeeze(means_ANN_yearly_fut),axis=0)
 ttest_MAM = scipy.stats.ttest_ind(np.squeeze(means_MAM_yearly_hist), np.squeeze(means_MAM_yearly_fut),axis=0)
 ttest_JJA = scipy.stats.ttest_ind(np.squeeze(means_JJA_yearly_hist), np.squeeze(means_JJA_yearly_fut),axis=0)
@@ -223,29 +232,29 @@ def plot_map(gridded_data,pvalue,seas,vmin,vmax,cmap):
 
     ax1.pcolormesh(lons, lats, gridded_data, cmap=cmap, vmin=vmin,vmax=vmax, transform=ccrs.PlateCarree(),zorder=0)
     
-# =============================================================================
-#     masked_grid = pvalue.copy()
-#     masked_grid[masked_grid>0.1] = np.nan
-#     ax1.pcolor(lons, lats, masked_grid, transform=ccrs.PlateCarree(), hatch='...', alpha=0,vmin=vmin,vmax=vmax)
-#     mpl.rcParams['hatch.linewidth'] = 0.8
-# 
-# =============================================================================
-    ax1.add_feature(cf.OCEAN, edgecolor='face', facecolor='lightblue', zorder=1)
+    masked_grid = pvalue.copy()
+    masked_grid[masked_grid>0.1] = np.nan
+    ax1.pcolor(lons, lats, masked_grid, transform=ccrs.PlateCarree(), hatch='...', alpha=0,vmin=vmin,vmax=vmax)
+    mpl.rcParams['hatch.linewidth'] = 0.8
+
+    #ax1.add_feature(cf.OCEAN, edgecolor='face', facecolor='lightblue', zorder=1)
     ax1.add_feature(cf.BORDERS,linewidth=0.5)
     ax1.add_feature(cf.STATES,linewidth=0.5)
     
     # d03 box
-    corner_x3, corner_y3 = WRFDomainLib.reproject_corners(corner_lon_full[2,:], corner_lat_full[2,:], wpsproj, latlonproj)
-    random_y_factor = -corner_y3[0]/12.5
-    random_x_factor = corner_x3[0]/65
+    #corner_x3, corner_y3 = WRFDomainLib.reproject_corners(corner_lon_full[2,:], corner_lat_full[2,:], wpsproj, latlonproj)
+    #random_y_factor = -corner_y3[0]/12.5
+    #random_x_factor = corner_x3[0]/65
     
-    ax1.add_patch(mpl.patches.Rectangle((corner_x3[0]+random_x_factor, corner_y3[0]+random_y_factor),  length_x[2], length_y[2],fill=None, lw=3, edgecolor='red', zorder=2))
-    ax1.text(-3700000, 700000, 'D03', va='top', ha='left',fontweight='bold', size=25, color='red', zorder=2)
+    #ax1.add_patch(mpl.patches.Rectangle((corner_x3[0]+random_x_factor, corner_y3[0]+random_y_factor),  length_x[2], length_y[2],fill=None, lw=3, edgecolor='red', zorder=2))
+    #ax1.text(-3700000, 700000, 'D03', va='top', ha='left',fontweight='bold', size=25, color='red', zorder=2)
     
     #plt.title(make_title(seas),fontsize=20)
 
 
-    ax1.set_extent([-131, -119, 46, 52], crs=ccrs.PlateCarree())
+    #ax1.set_extent([-131, -119, 46, 52], crs=ccrs.PlateCarree())
+    ax1.set_extent([-131+1.4, -119-1.15, 46+0.4, 52-0.3], crs=ccrs.PlateCarree())
+
     
     cbar_ax = fig1.add_axes([0.2, 0.09, 0.62, 0.02])
     fig1.colorbar(mpl.cm.ScalarMappable(cmap=cmap, norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)),
@@ -256,9 +265,10 @@ def plot_map(gridded_data,pvalue,seas,vmin,vmax,cmap):
     elif variable == "pr":
         cbar_ax.set_xlabel("$\Delta$ Precipitation (%)",size=25)      
     elif variable == "wind":
-        cbar_ax.set_xlabel("$\Delta$ Wind Speed (m/s)",size=25)   
-    plt.savefig('/Users/evagnegy/Desktop/CanESM2_WRF_Eval/figures/spatial_maps/future_changes/' + period + '_' + variable + '_' + seas + '.png',bbox_inches='tight')
-
+        cbar_ax.set_xlabel("$\Delta$ Wind Speed (%)",size=25)  
+        
+    plt.savefig('/Users/evagnegy/Desktop/CanESM2_WRF_Eval/figures/trends/other/canesm2_wrf_'+domain+'_' + period + '_' + variable + '_' + seas + '_mean_change.png',bbox_inches='tight')
+    plt.close()
     
     
 #%%
@@ -292,12 +302,24 @@ elif variable == "pr":
     cmap = newcmp_pr
     
 elif variable == "wind":
-    vmin= -1
-    vmax = 1
-    cmap = 'bwr'
+    vmin= -20
+    vmax = 20
+    #cmap = cmap = cm.get_cmap('bwr', 24)
+    #t_colors = ['#142f60','#3465aa','#5392c1','#99c4dd','#d3e5f0','#f7f7f7',
+    #                    '#fadcc8','#eea785','#ce6451','#ab242f','#630921']
+    
+    colors_wspd_delta = ['#424c03','#41641a','#4b8c49','#79b17d','#aed0b2','#d7e3e0',
+                         '#aec3d5','#7394b5','#3e6896','#294072','#2c194d'][::-1]
+    
+    cmap = pltcol.LinearSegmentedColormap.from_list("custom", colors_wspd_delta,N=22)
+    cmap = cmap(np.linspace(0, 1, cmap.N))[1:-1] 
+    cmap = pltcol.LinearSegmentedColormap.from_list("custom", cmap,N=20)
+    cmap.set_over(colors_wspd_delta[-1]) #add the max arrow color
+    cmap.set_under(colors_wspd_delta[0]) #add the min arrow color
     
 
-plot_map(means_ANN_delta,ttest_ANN.pvalue, "ANN",vmin,vmax,cmap)
+#plot_map(means_ANN_delta,ttest_ANN.pvalue, "ANN",vmin,vmax,cmap)
+
 plot_map(means_MAM_delta,ttest_MAM.pvalue, "MAM",vmin,vmax,cmap)
 plot_map(means_JJA_delta,ttest_JJA.pvalue, "JJA",vmin,vmax,cmap)
 plot_map(means_SON_delta,ttest_SON.pvalue, "SON",vmin,vmax,cmap)

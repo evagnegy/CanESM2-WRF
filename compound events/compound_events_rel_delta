@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jan 13 00:12:43 2025
+
+@author: evagnegy
+"""
+
 from netCDF4 import Dataset
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -22,7 +30,7 @@ import matplotlib.colors as pltcol
 t_type = "warm" #warm, cold 
 pr_type = "dry" #wet, dry
 
-period = 'rcp85' # hist, rcp45, rcp85
+period = 'rcp45' # hist, rcp45, rcp85
 
 #ignored if period=hist
 fut_type = 'delta' #delta, abs 
@@ -181,11 +189,9 @@ def calculate_compound_event(seas):
             return(count_event_peryear_seas_fut)
         
         elif fut_type == "delta":
-            count_event_peryear_seas_delta = np.mean(count_event_peryear_seas_fut,axis=0)-np.mean(count_event_peryear_seas_hist,axis=0)
+            count_event_peryear_seas_delta = 100*((np.mean(count_event_peryear_seas_fut,axis=0)-np.mean(count_event_peryear_seas_hist,axis=0))/np.mean(count_event_peryear_seas_hist,axis=0))
 
-            ttest_seas = scipy.stats.ttest_ind(np.squeeze(count_event_peryear_seas_hist), np.squeeze(count_event_peryear_seas_fut),axis=0)
-
-            return(ttest_seas.pvalue,count_event_peryear_seas_delta)
+            return(count_event_peryear_seas_delta)
 
 #%%
 
@@ -205,38 +211,18 @@ def save_netcdf(value,file,name):
     da.to_netcdf(directory)
     
     
-    
-if period == "hist":
-    print("mam")
-    count_event_peryear_MAM = calculate_compound_event("mam")
-    save_netcdf(count_event_peryear_MAM,f'{t_type}_{pr_type}_{period}_mam.nc','count')
-    print("jja")
-    count_event_peryear_JJA = calculate_compound_event("jja")
-    save_netcdf(count_event_peryear_JJA,f'{t_type}_{pr_type}_{period}_jja.nc','count')
-    print("son")
-    count_event_peryear_SON = calculate_compound_event("son")
-    save_netcdf(count_event_peryear_SON,f'{t_type}_{pr_type}_{period}_son.nc','count')
-    print("djf")
-    count_event_peryear_DJF = calculate_compound_event("djf")
-    save_netcdf(count_event_peryear_DJF,f'{t_type}_{pr_type}_{period}_djf.nc','count')
-
-else:
-    print("mam")
-    pvalue_MAM,count_event_peryear_MAM = calculate_compound_event("mam")
-    save_netcdf(pvalue_MAM,f'{t_type}_{pr_type}_{period}_base_{base_period}_mam_pvalue.nc','pvalue')
-    save_netcdf(count_event_peryear_MAM,f'{t_type}_{pr_type}_{period}_base_{base_period}_mam.nc','count')
-    print("jja")
-    pvalue_JJA,count_event_peryear_JJA = calculate_compound_event("jja")
-    save_netcdf(pvalue_JJA,f'{t_type}_{pr_type}_{period}_base_{base_period}_jja_pvalue.nc','pvalue')
-    save_netcdf(count_event_peryear_JJA,f'{t_type}_{pr_type}_{period}_base_{base_period}_jja.nc','count')
-    print("son")
-    pvalue_SON,count_event_peryear_SON = calculate_compound_event("son")
-    save_netcdf(pvalue_SON,f'{t_type}_{pr_type}_{period}_base_{base_period}_son_pvalue.nc','pvalue')
-    save_netcdf(count_event_peryear_SON,f'{t_type}_{pr_type}_{period}_base_{base_period}_son.nc','count')
-    print("djf")
-    pvalue_DJF,count_event_peryear_DJF = calculate_compound_event("djf")
-    save_netcdf(pvalue_DJF,f'{t_type}_{pr_type}_{period}_base_{base_period}_djf_pvalue.nc','pvalue')
-    save_netcdf(count_event_peryear_DJF,f'{t_type}_{pr_type}_{period}_base_{base_period}_djf.nc','count')
+print("mam")
+count_event_peryear_MAM = calculate_compound_event("mam")
+save_netcdf(count_event_peryear_MAM,f'{t_type}_{pr_type}_{period}_base_{base_period}_mam_rel.nc','rel_count')
+print("jja")
+count_event_peryear_JJA = calculate_compound_event("jja")
+save_netcdf(count_event_peryear_JJA,f'{t_type}_{pr_type}_{period}_base_{base_period}_jja_rel.nc','rel_count')
+print("son")
+count_event_peryear_SON = calculate_compound_event("son")
+save_netcdf(count_event_peryear_SON,f'{t_type}_{pr_type}_{period}_base_{base_period}_son_rel.nc','rel_count')
+print("djf")
+count_event_peryear_DJF = calculate_compound_event("djf")
+save_netcdf(count_event_peryear_DJF,f'{t_type}_{pr_type}_{period}_base_{base_period}_djf_rel.nc','rel_count')
 
 #%%
 
@@ -310,7 +296,7 @@ def plot_compound_events(gridded_data,pvalue,seas,vmin,vmax):
         cmap.set_over(colors[-1]) #add the max arrow color
         cmap.set_under(colors[0]) #add the min arrow color
             
-        xlabel='$\Delta$ Count/year'
+        xlabel='$\Delta$ Count/year (%)'
         
     WPSFile = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/domain/namelist.wps.txt'
     wpsproj, latlonproj, corner_lat_full, corner_lon_full, length_x, length_y = WRFDomainLib.calc_wps_domain_info(WPSFile)
@@ -320,12 +306,14 @@ def plot_compound_events(gridded_data,pvalue,seas,vmin,vmax):
         
     ax1.pcolormesh(lons, lats, gridded_data, cmap=cmap,vmin=vmin,vmax=vmax, transform=ccrs.PlateCarree(),zorder=0)
     
-    if period != "hist":
-        masked_grid = pvalue.copy()
-        masked_grid[masked_grid>0.1] = np.nan
-        ax1.pcolor(lons, lats, masked_grid, transform=ccrs.PlateCarree(), hatch='...', alpha=0,vmin=vmin,vmax=vmax)
-        mpl.rcParams['hatch.linewidth'] = 0.8
-
+# =============================================================================
+# 
+#     masked_grid = pvalue.copy()
+#     masked_grid[masked_grid>0.1] = np.nan
+#     ax1.pcolor(lons, lats, masked_grid, transform=ccrs.PlateCarree(), hatch='...', alpha=0,vmin=vmin,vmax=vmax)
+#     mpl.rcParams['hatch.linewidth'] = 0.8
+# 
+# =============================================================================
     
     ax1.add_feature(cf.BORDERS,linewidth=0.5)
     ax1.add_feature(cf.STATES,linewidth=0.5)
@@ -345,11 +333,7 @@ def plot_compound_events(gridded_data,pvalue,seas,vmin,vmax):
 
     cbar_ax = fig1.add_axes([0.2, 0.09, 0.62, 0.02])
     
-    if period=="hist":
-        fig1.colorbar(cm.ScalarMappable(cmap=cmap, norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)),
-                      cax=cbar_ax, orientation='horizontal',extend='max')
-    else:        
-        fig1.colorbar(cm.ScalarMappable(cmap=cmap, norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)),
+    fig1.colorbar(cm.ScalarMappable(cmap=cmap, norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)),
                   cax=cbar_ax, orientation='horizontal',extend='both')#,ticks=np.arange(0, vmax+1, 0.5))
     
 
@@ -358,65 +342,33 @@ def plot_compound_events(gridded_data,pvalue,seas,vmin,vmax):
     cbar_ax.tick_params(labelsize=20)
     cbar_ax.set_xlabel(xlabel,size=20)         
   
-    if period != "hist":
-        plt.savefig('/Users/evagnegy/Desktop/CanESM2_WRF_Eval/figures/compound_events/' + t_type + "_" + pr_type + "_" + period + "_base_" + base_period + "_" + seas,bbox_inches='tight')
-    else:
-        plt.savefig('/Users/evagnegy/Desktop/CanESM2_WRF_Eval/figures/compound_events/' + t_type + "_" + pr_type + "_" + period + "_" + seas,bbox_inches='tight')
-        #plt.close()
+    plt.savefig('/Users/evagnegy/Desktop/CanESM2_WRF_Eval/figures/compound_events/' + t_type + "_" + pr_type + "_" + period + "_" + seas + "_rel",bbox_inches='tight')
 
 
 
 #%
 
 
-t_type = "warm" #warm, cold 
-pr_type = "wet" #wet, dry
-
-period = 'rcp45' # hist, rcp45, rcp85
-
-#ignored if period=hist
-fut_type = 'delta' #delta, abs 
-base_period = "hist" #fut or hist
-
-
 directory = '/Users/evagnegy/Desktop/CanESM2_WRF_Eval/figures/compound_events/ncfiles/'
 
-if period == "hist":
-    count_event_peryear_MAM = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_mam.nc')['count'].values
-    count_event_peryear_JJA = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_jja.nc')['count'].values
-    count_event_peryear_SON = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_son.nc')['count'].values
-    count_event_peryear_DJF = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_djf.nc')['count'].values
 
-else:
-    count_event_peryear_MAM = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_mam.nc')['count'].values
-    count_event_peryear_JJA = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_jja.nc')['count'].values
-    count_event_peryear_SON = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_son.nc')['count'].values
-    count_event_peryear_DJF = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_djf.nc')['count'].values
-    
-    pvalue_MAM = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_mam_pvalue.nc')['pvalue'].values
-    pvalue_JJA = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_jja_pvalue.nc')['pvalue'].values
-    pvalue_SON = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_son_pvalue.nc')['pvalue'].values
-    pvalue_DJF = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_djf_pvalue.nc')['pvalue'].values
+count_event_peryear_MAM = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_mam_rel.nc')['rel_count'].values
+count_event_peryear_JJA = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_jja_rel.nc')['rel_count'].values
+count_event_peryear_SON = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_son_rel.nc')['rel_count'].values
+count_event_peryear_DJF = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_djf_rel.nc')['rel_count'].values
+
+pvalue_MAM = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_mam_pvalue.nc')['pvalue'].values
+pvalue_JJA = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_jja_pvalue.nc')['pvalue'].values
+pvalue_SON = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_son_pvalue.nc')['pvalue'].values
+pvalue_DJF = xr.open_dataset(f'{directory}{t_type}_{pr_type}_{period}_base_{base_period}_djf_pvalue.nc')['pvalue'].values
 
 
+vmin=-500
+vmax=500
 
-if period == "hist":
-    
-    vmin=0
-    vmax=12
-
-    plot_compound_events(np.array(count_event_peryear_MAM),None, "MAM",vmin,vmax)
-    plot_compound_events(np.array(count_event_peryear_JJA),None, "JJA",vmin,vmax)
-    plot_compound_events(np.array(count_event_peryear_SON),None, "SON",vmin,vmax)
-    plot_compound_events(np.array(count_event_peryear_DJF),None, "DJF",vmin,vmax)
-
-else:
-    vmin=-60
-    vmax=60
-
-    plot_compound_events(np.array(count_event_peryear_MAM),pvalue_MAM, "MAM",vmin,vmax)
-    plot_compound_events(np.array(count_event_peryear_JJA),pvalue_JJA, "JJA",vmin,vmax)
-    plot_compound_events(np.array(count_event_peryear_SON),pvalue_SON, "SON",vmin,vmax)
-    plot_compound_events(np.array(count_event_peryear_DJF),pvalue_DJF, "DJF",vmin,vmax)
+plot_compound_events(np.array(count_event_peryear_MAM),pvalue_MAM, "MAM",vmin,vmax)
+plot_compound_events(np.array(count_event_peryear_JJA),pvalue_JJA, "JJA",vmin,vmax)
+plot_compound_events(np.array(count_event_peryear_SON),pvalue_SON, "SON",vmin,vmax)
+plot_compound_events(np.array(count_event_peryear_DJF),pvalue_DJF, "DJF",vmin,vmax)
 
 

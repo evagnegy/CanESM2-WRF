@@ -54,6 +54,7 @@ class TaylorDiagram(object):
         gl1 = GF.FixedLocator(tlocs)    # Positions
         tf1 = GF.DictFormatter(dict(zip(tlocs, map(str, rlocs))))
 
+
         # Standard deviation axis extent (in units of reference stddev)
         self.smin = srange[0] * self.refstd
         if max_std == None:
@@ -61,10 +62,14 @@ class TaylorDiagram(object):
         else:
             self.smax = max_std
 
+        standard_deviation_ticks = NP.linspace(self.smin, self.smax, 5)  # Fewer standard deviation ticks
+        gl2 = GF.FixedLocator(standard_deviation_ticks)
+        print('hi')
+                
         ghelper = FA.GridHelperCurveLinear(
             tr,
             extremes=(0, self.tmax, self.smin, self.smax),
-            grid_locator1=gl1, tick_formatter1=tf1)
+            grid_locator1=gl1, tick_formatter1=tf1,grid_locator2=gl2)
 
         if fig is None:
             fig = PLT.figure()
@@ -80,7 +85,7 @@ class TaylorDiagram(object):
         ax.axis["top"].label.set_text("Correlation")
 
         ax.axis["left"].set_axis_direction("bottom")  # "X axis"
-        ax.axis["left"].label.set_text("Standard deviation (" + unit + ")")
+        ax.axis["left"].label.set_text("Standard ddddeviation (" + unit + ")")
 
         ax.axis["right"].set_axis_direction("top")    # "Y-axis"
         ax.axis["right"].toggle(ticklabels=True)
